@@ -1,0 +1,365 @@
+{
+  "name": "Course Automation v2 - With Langchain",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": ["message"],
+        "additionalFields": {
+          "download": false
+        }
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 400],
+      "webhookId": ""
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "combineOperation": "any"
+          },
+          "conditions": [
+            {
+              "id": "pdf-check",
+              "leftValue": "={{ $json.message.document?.mime_type }}",
+              "rightValue": "application/pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "check-if-pdf",
+      "name": "Check if PDF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract course name from caption or filename\nconst message = $input.item.json.message;\nconst caption = message.caption || '';\nconst filename = message.document?.file_name || '';\n\n// Try to extract from caption\nlet courseName = '';\n\nif (caption.startsWith('/course ')) {\n  courseName = caption.replace('/course ', '').trim();\n} else if (caption.length > 0) {\n  courseName = caption;\n} else {\n  // Extract from filename (remove .pdf and clean)\n  courseName = filename.replace('.pdf', '').replace(/[^a-zA-Z0-9_\\u0590-\\u05FF]/g, '_');\n}\n\n// Clean course name\ncourseName = courseName.toLowerCase().trim().replace(/\\s+/g, '_');\n\nreturn {\n  course_id: courseName,\n  display_name: courseName,\n  file_id: message.document.file_id,\n  file_name: message.document.file_name,\n  chat_id: message.chat.id,\n  auto_detected: caption.length === 0\n};"
+      },
+      "id": "extract-course-info",
+      "name": "Extract Course Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://syzxedbcapcynzjlpjcg.supabase.co/rest/v1/course_settings",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_SERVICE_ROLE_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"course_id\": \"{{ $json.course_id }}\",\n  \"display_name\": \"{{ $json.display_name }}\",\n  \"enabled\": true\n}",
+        "options": {}
+      },
+      "id": "upsert-course",
+      "name": "Upsert Course Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "=📄 קיבלתי את הקובץ!\n\n🎓 קורס: **{{ $json.course_id }}**\n{{ $json.auto_detected ? '(זיהוי אוטומטי)' : '' }}\n\n⚙️ מתחיל עיבוד...",
+        "additionalFields": {}
+      },
+      "id": "notify-start",
+      "name": "Notify Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $json.file_id }}",
+        "options": {}
+      },
+      "id": "download-pdf",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "resource": "document",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929"
+        },
+        "inputType": "binary",
+        "prompt": "=אני רוצה להכין אינפוגרפיקות שיעזור לי להציג את התוכן של הסיכום הזה. תן לי רשימה של דברים שמגיעה להם אינפוגרפיקה. אל תגיד לי איך לעצב אלא רק את התאוריות, שיטות, מושגים, קבוצות של מושגים, השוואות בין מושגים דומים, פעולה מוסימת שחשוב ללמוד או כל דבר שנראה לך רלוונטי. תכין בין 40 ל60, לפי הצורך בעינייך.\n\nחובה להחזיר בדיוק 40-60 נושאים.\nפורמט: רשימה ממוספרת, נושא אחד בכל שורה.",
+        "options": {
+          "maxTokens": 8000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1,
+      "position": [1560, 400],
+      "id": "analyze-document",
+      "name": "Analyze PDF for Topics",
+      "credentials": {
+        "anthropicApi": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "topics",
+              "name": "topics_text",
+              "value": "={{ $json.response }}",
+              "type": "string"
+            },
+            {
+              "id": "course",
+              "name": "course_id",
+              "value": "={{ $('Extract Course Info').first().json.course_id }}",
+              "type": "string"
+            },
+            {
+              "id": "chat",
+              "name": "chat_id",
+              "value": "={{ $('Extract Course Info').first().json.chat_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-context",
+      "name": "Set Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "✅ ניתוח הושלם!\n\n📝 יוצר 50 שאלות ופרומפטים...",
+        "additionalFields": {}
+      },
+      "id": "notify-progress",
+      "name": "Notify Progress",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929"
+        },
+        "prompt": "=רשימת נושאים:\n{{ $json.topics_text }}\n\n---\n\nאתה מומחה להוראה אקדמית, בניית הערכה ולמידה מבוססת הבנה. המטרה שלך היא ליצור 50 שאלות אמריקאיות שמלמדות.\n\nהקלט: רשימת נושאים לימודיים. עליך להתבסס אך ורק על הטקסט שניתן.\n\nעקרונות:\n- השאלה חייבת לבדוק הבנה מושגית, לא שינון\n- תיאורית והקשרית\n- 4 אפשרויות סבירות\n- אפשרויות שגויות מייצגות בלבול נפוץ\n- תשובה נכונה אחת\n- הסבר מלמד\n\nפורמט:\nהחזר JSON array עם 50 אובייקטים:\n[\n  {\n    \"question\": \"...\",\n    \"options\": [\"א\", \"ב\", \"ג\", \"ד\"],\n    \"correct_answer\": \"ב\",\n    \"explanation\": \"...\"\n  }\n]\n\nרק JSON, ללא טקסט נוסף.",
+        "options": {
+          "maxTokens": 16000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1,
+      "position": [2220, 280],
+      "id": "generate-questions",
+      "name": "Generate Questions",
+      "credentials": {
+        "anthropicApi": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-4-5-20250929"
+        },
+        "prompt": "=רשימת נושאים:\n{{ $json.topics_text }}\n\n---\n\nאתה עורך תוכן לימודי ומומחה לפרומטים ליצירת אינפוגרפיקות.\n\nחשוב: המודל ליצירת תמונות לא רואה את החומר המקורי. כל אינפוגרפיקה חייבת להתבסס על הפרומט בלבד.\n\nעבור כל נושא:\n- צור פרומט אחד\n- הכלל את כל הטקסט שיופיע באינפוגרפיקה\n\nמבנה:\nCanvas & Layout: Vertical 9:16, educational social media story\nHeadline: כותרת 3-6 מילים\nMain Content: הגדרה + מאפיינים (אם מושג בודד) או שתי עמודות (אם השוואה)\nClarification Line: חידוד מושגי\nVisual Elements: flat icons, תרשימים\nStyle: Educational infographic, flat design, אקדמי\n\nפורמט פלט:\n=== PROMPT ===\n[פרומט מלא כאן]\n\n=== PROMPT ===\n[פרומט הבא]\n\nרק הפרומפטים, ללא טקסט נוסף.",
+        "options": {
+          "maxTokens": 16000
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1,
+      "position": [2220, 520],
+      "id": "generate-prompts",
+      "name": "Generate Infographic Prompts",
+      "credentials": {
+        "anthropicApi": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse questions from Claude\nconst responseText = $input.item.json.response;\nconst courseId = $('Set Context').first().json.course_id;\n\n// Extract JSON\nlet questions;\ntry {\n  const jsonMatch = responseText.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  questions = JSON.parse(jsonMatch ? jsonMatch[0] : responseText);\n} catch (e) {\n  console.error('Parse error:', e);\n  return [];\n}\n\n// Format for Supabase\nreturn questions.map(q => {\n  const options = q.options.map((text, i) => ({\n    id: String.fromCharCode(65 + i),\n    text: text,\n    isCorrect: text === q.correct_answer || q.options.indexOf(q.correct_answer) === i\n  }));\n  \n  return {\n    course_id: courseId,\n    question: q.question,\n    options: options,\n    explanation: q.explanation || '',\n    difficulty: 'medium'\n  };\n});"
+      },
+      "id": "parse-questions",
+      "name": "Parse Questions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split prompts\nconst responseText = $input.item.json.response;\nconst courseId = $('Set Context').first().json.course_id;\n\nconst prompts = responseText\n  .split('=== PROMPT ===')\n  .map(p => p.trim())\n  .filter(p => p.length > 100);\n\nreturn prompts.map((prompt, i) => ({\n  prompt: prompt,\n  course_id: courseId,\n  index: i + 1,\n  filename: `infographic_${i + 1}.png`\n}));"
+      },
+      "id": "split-prompts",
+      "name": "Split Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 520]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://syzxedbcapcynzjlpjcg.supabase.co/rest/v1/quiz_questions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_SERVICE_ROLE_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "insert-questions",
+      "name": "Insert Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 280]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $('Set Context').first().json.chat_id }}",
+        "text": "=🎉 **הושלם!**\n\n✅ {{ $('Parse Questions').all().length }} שאלות נוספו\n✅ {{ $('Split Prompts').all().length }} פרומפטים נוצרו\n\n📚 קורס: **{{ $('Set Context').first().json.course_id }}**\n\nהכל מוכן!",
+        "additionalFields": {}
+      },
+      "id": "notify-complete",
+      "name": "Notify Complete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [2880, 400]
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [[{"node": "Check if PDF", "type": "main", "index": 0}]]
+    },
+    "Check if PDF": {
+      "main": [[{"node": "Extract Course Info", "type": "main", "index": 0}]]
+    },
+    "Extract Course Info": {
+      "main": [[{"node": "Upsert Course Settings", "type": "main", "index": 0}]]
+    },
+    "Upsert Course Settings": {
+      "main": [[{"node": "Notify Start", "type": "main", "index": 0}]]
+    },
+    "Notify Start": {
+      "main": [[{"node": "Download PDF", "type": "main", "index": 0}]]
+    },
+    "Download PDF": {
+      "main": [[{"node": "Analyze PDF for Topics", "type": "main", "index": 0}]]
+    },
+    "Analyze PDF for Topics": {
+      "main": [[{"node": "Set Context", "type": "main", "index": 0}]]
+    },
+    "Set Context": {
+      "main": [[{"node": "Notify Progress", "type": "main", "index": 0}]]
+    },
+    "Notify Progress": {
+      "main": [[
+        {"node": "Generate Questions", "type": "main", "index": 0},
+        {"node": "Generate Infographic Prompts", "type": "main", "index": 0}
+      ]]
+    },
+    "Generate Questions": {
+      "main": [[{"node": "Parse Questions", "type": "main", "index": 0}]]
+    },
+    "Generate Infographic Prompts": {
+      "main": [[{"node": "Split Prompts", "type": "main", "index": 0}]]
+    },
+    "Parse Questions": {
+      "main": [[{"node": "Insert Questions", "type": "main", "index": 0}]]
+    },
+    "Insert Questions": {
+      "main": [[{"node": "Notify Complete", "type": "main", "index": 0}]]
+    },
+    "Split Prompts": {
+      "main": [[{"node": "Notify Complete", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-02-04T14:00:00.000Z",
+  "versionId": "2"
+}

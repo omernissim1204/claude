@@ -5,11 +5,13 @@
 ## 📁 קבצים בפרויקט
 
 ### 1. **Workflows**
-- `course-automation-simple.json` - **התחל מכאן!** Workflow מוכן לשימוש
-- `course-automation-workflow.json` - גרסה מתקדמת (לעתיד)
+- ⭐ `course-automation-v2.json` - **גרסה חדשה!** עם Langchain nodes (מומלץ!)
+- `course-automation-simple.json` - גרסה ראשונה (HTTP requests)
+- `course-automation-workflow.json` - ניסוי ראשוני (לא לשימוש)
 
 ### 2. **מדריכים**
-- `workflow-installation-guide.md` - מדריך התקנה מפורט שלב אחר שלב
+- ⭐ `V2-SETUP-GUIDE.md` - **מדריך ל-v2** (התחל כאן!)
+- `workflow-installation-guide.md` - מדריך ל-v1
 - `n8n-mcp-setup.md` - הגדרת n8n-MCP עם Claude Desktop
 
 ---
