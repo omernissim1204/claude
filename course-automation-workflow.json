@@ -1,0 +1,669 @@
+{
+  "name": "Course Automation - PDF to Quiz & Infographics",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "TELEGRAM_WEBHOOK_ID",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.message.document.mime_type}}",
+              "operation": "contains",
+              "value2": "pdf"
+            }
+          ]
+        }
+      },
+      "id": "check-pdf",
+      "name": "Check if PDF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.message.chat.id}}",
+        "text": "קיבלתי את הקובץ! 📄\n\nמה שם הקורס/התיקייה שברצונך ליצור?\n(לדוגמה: psychopathology, microbio, וכו')",
+        "replyMarkup": "forceReply",
+        "additionalFields": {
+          "reply_to_message_id": "={{$json.message.message_id}}"
+        }
+      },
+      "id": "ask-course-name",
+      "name": "Ask Course Name",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [680, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "download": true
+        }
+      },
+      "id": "wait-for-course-name",
+      "name": "Wait for Course Name",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "webhookId": "TELEGRAM_WEBHOOK_ID_2",
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract course name and PDF from previous nodes\nconst courseName = $input.item.json.message.text.trim().toLowerCase().replace(/\\s+/g, '_');\nconst pdfData = $('Telegram Trigger').first().json;\n\nreturn {\n  course_id: courseName,\n  display_name: courseName,\n  pdf_file_id: pdfData.message.document.file_id,\n  pdf_file_name: pdfData.message.document.file_name,\n  chat_id: $input.item.json.message.chat.id\n};"
+      },
+      "id": "prepare-data",
+      "name": "Prepare Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chat_id}}",
+        "text": "מעולה! מתחיל לעבוד על הקורס: {{$json.course_id}} ⚙️\n\nזה ייקח כמה דקות...",
+        "additionalFields": {}
+      },
+      "id": "notify-start",
+      "name": "Notify Start",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1340, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://syzxedbcapcynzjlpjcg.supabase.co/rest/v1/course_settings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "course_id",
+              "value": "={{$json.course_id}}"
+            },
+            {
+              "name": "display_name",
+              "value": "={{$json.display_name}}"
+            },
+            {
+              "name": "enabled",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
+        }
+      },
+      "id": "upsert-course",
+      "name": "Upsert Course Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot{{$credentials.token}}/getFile",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "file_id",
+              "value": "={{$json.pdf_file_id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-pdf-path",
+      "name": "Get PDF File Path",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1780, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.telegram.org/file/bot{{$credentials.token}}/{{$json.result.file_path}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "download-pdf",
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2000, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 4000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"document\",\n          \"source\": {\n            \"type\": \"base64\",\n            \"media_type\": \"application/pdf\",\n            \"data\": \"{{$json.data}}\"\n          }\n        },\n        {\n          \"type\": \"text\",\n          \"text\": \"אני רוצה להכין אינפוגרפיקות שיעזור לי להציג את התוכן של הסיכום הזה. תן לי רשימה של דברים שמגיעה להם אינפוגרפיקה. אל תגיד לי איך לעצב אלא רק את התאוריות, שיטות, מושגים, קבוצות של מושגים, השוואות בין מושגים דומים, פעולה מוסימת שחשוב ללמוד או כל דבר שנראה לך רלוונטי. תכין בין 40 ל60, לפי הצורך בעינייך.\\n\\nהחזר את התוצאה כרשימה ממוספרת פשוטה, שורה אחת לכל נושא.\"\n        }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "analyze-topics",
+      "name": "Claude: Analyze Topics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 300],
+      "credentials": {
+        "anthropicApi": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic Claude"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "topics_list",
+              "name": "topics_list",
+              "value": "={{$json.content[0].text}}",
+              "type": "string"
+            },
+            {
+              "id": "course_id",
+              "name": "course_id",
+              "value": "={{$('Prepare Data').first().json.course_id}}",
+              "type": "string"
+            },
+            {
+              "id": "chat_id",
+              "name": "chat_id",
+              "value": "={{$('Prepare Data').first().json.chat_id}}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-topics",
+      "name": "Set Topics",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{$json.chat_id}}",
+        "text": "✅ ניתוח הסיכום הושלם!\n\nמתחיל ליצור:\n- 50 שאלות אמריקאיות 📝\n- אינפוגרפיקות 🎨\n\nזה ייקח עוד כמה דקות...",
+        "additionalFields": {}
+      },
+      "id": "notify-progress",
+      "name": "Notify Progress",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [2660, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"רשימת נושאים:\\n{{$json.topics_list}}\\n\\n---\\n\\nאתה מומחה להוראה אקדמית, בניית הערכה ולמידה מבוססת הבנה.\\n\\nהמטרה שלך היא ליצור 50 שאלות אמריקאיות שמלמדות, לא שאלות טריוויה ולא שאלות זיכרון טכני.\\n\\nהקלט שתקבל\\nאני אתן לך: טקסט לימודי קצר או רשימת מושגים, לעיתים מושג בודד, ולעיתים השוואה בין מושגים.\\n\\nחשוב: אין לך גישה לחומר לימודי חיצוני. עליך להתבסס אך ורק על הטקסט שניתן בקלט. אין להניח ידע מוקדם מעבר למה שנכתב במפורש.\\n\\nעקרונות פדגוגיים מחייבים\\nבעת בניית כל שאלה:\\n- השאלה חייבת לבדוק הבנה מושגית, לא שינון ניסוח\\n- השאלה צריכה להיות תיאורית והקשרית\\n- הימנע משאלות מסוג \\\"מה ההגדרה של…\\\" או \\\"כמה סימפטומים צריך כדי…\\\"\\n- העדף שאלות מסוג \\\"איזו פרשנות מתאימה ביותר ל…\\\" או \\\"מה מסביר בצורה הטובה ביותר…\\\"\\n\\nבניית אפשרויות התשובה (קריטי)\\nכל 4 האפשרויות חייבות להיות סבירות מבחינה מושגית. אפשרויות שגויות צריכות לייצג בלבול נפוץ, הכללת יתר, ערבוב בין מושגים קרובים. יש תשובה נכונה אחת בלבד.\\n\\nניסוח ההסבר\\nההסבר חייב להסביר למה התשובה הנכונה נכונה ולהבהיר בקצרה למה האחרות פחות מדויקות.\\n\\nכללים טכניים\\nהחזר JSON array עם 50 אובייקטים. כל אובייקט במבנה:\\n{\\n  \\\"type\\\": \\\"quiz\\\",\\n  \\\"question\\\": \\\"...\\\",\\n  \\\"options\\\": [\\\"...\\\", \\\"...\\\", \\\"...\\\", \\\"...\\\"],\\n  \\\"correct_answer\\\": \\\"...\\\",\\n  \\\"explanation\\\": \\\"...\\\"\\n}\\n\\nבלי טקסט לפני או אחרי, רק JSON array תקין.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "generate-questions",
+      "name": "Claude: Generate Questions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2880, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic Claude"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-5-20250929\",\n  \"max_tokens\": 8000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"רשימת נושאים:\\n{{$json.topics_list}}\\n\\n---\\n\\nאתה עורך תוכן לימודי, ארט דיירקטור ומומחה לפרומטים למודלי יצירת תמונה.\\n\\nחשוב: למודל יצירת התמונות אין גישה לחומר הלימודי המקורי. כל אינפוגרפיקה חייבת להתבסס אך ורק על המלל שמופיע בתוך הפרומט עצמו.\\n\\nהקלט שתקבל\\nאני אתן לך רשימה של נושאים לימודיים. כל נושא יהיה או מושג בודד או השוואה בין שני מושגים.\\n\\nעבור כל נושא ברשימה: עליך ליצור פרומט אחד בלבד. הפרומט חייב להכיל את כל הטקסט הלימודי שיופיע באינפוגרפיקה.\\n\\nזיהוי סוג הנושא\\nלפני כתיבת כל פרומט:\\n- אם מדובר במושג אחד → אינפוגרפיקה מושגית\\n- אם מדובר בהשוואה → אינפוגרפיקה השוואתית\\n\\nעקרונות חובה לכל פרומט\\nהפרומט חייב להיות טקסט רציף אחד, מוכן לשליחה למודל יצירת תמונה. כל המלל שיופיע באינפוגרפיקה חייב להיות כתוב במפורש בפרומט.\\n\\nמבנה קבוע לכל פרומט\\n\\nCanvas & Layout: Vertical 9:16, educational social media story, Clean grid, strong margins, centered composition, Clear visual separation between title, content and footer\\n\\nHeadline (Top): כותרת קצרה וברורה 3-6 מילים, מגדירה את המושג, טיפוגרפיה עבה וקריאה\\n\\nMain Content (Center):\\n- אם מושג בודד: הגדרה קצרה + 3-5 מאפיינים\\n- אם השוואה: שתי עמודות שוות, כל אחת עם הגדרה + 2-3 מאפיינים\\n\\nClarification Line (Bottom): חידוד מושגי אחד או הבדל עקרוני\\n\\nVisual Elements: אייקונים פשוטים flat icons, תרשימים לפי הצורך\\n\\nStyle & Mood: Educational infographic, Flat design, minimal shadows, אקדמי ניטרלי ברור\\n\\nImage Quality Instructions: Sharp high resolution, No blur, No extra text outside defined areas\\n\\nפורמט פלט מחייב\\nהפרדה בין פרומפטים ע\\\"י:\\n=== PROMPT ===\\nCanvas & Layout: ...\\nHeadline (Top): ...\\nMain Content (Center): ...\\nClarification Line (Bottom): ...\\nVisual Elements: ...\\nStyle & Mood: ...\\nImage Quality Instructions: ...\\n\\n=== PROMPT ===\\n...\\n\\nהחזר רק את הפרומפטים, ללא טקסט נוסף.\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "generate-prompts",
+      "name": "Claude: Generate Prompts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2880, 400],
+      "credentials": {
+        "anthropicApi": {
+          "id": "ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic Claude"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse questions JSON from Claude response\nconst responseText = $input.item.json.content[0].text;\nconst courseId = $('Set Topics').first().json.course_id;\n\n// Extract JSON array from response\nlet questionsArray;\ntry {\n  // Try to find JSON array in the response\n  const jsonMatch = responseText.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    questionsArray = JSON.parse(jsonMatch[0]);\n  } else {\n    questionsArray = JSON.parse(responseText);\n  }\n} catch (e) {\n  throw new Error('Failed to parse questions JSON: ' + e.message);\n}\n\n// Format for Supabase\nconst formattedQuestions = questionsArray.map(q => {\n  // Parse options array into the format Supabase expects\n  const formattedOptions = q.options.map((opt, idx) => ({\n    id: String.fromCharCode(65 + idx), // A, B, C, D\n    text: opt,\n    isCorrect: opt === q.correct_answer\n  }));\n  \n  return {\n    course_id: courseId,\n    question: q.question,\n    options: formattedOptions,\n    explanation: q.explanation,\n    difficulty: 'medium' // Default\n  };\n});\n\nreturn formattedQuestions;"
+      },
+      "id": "parse-questions",
+      "name": "Parse Questions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://syzxedbcapcynzjlpjcg.supabase.co/rest/v1/quiz_questions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 50,
+              "batchInterval": 1000
+            }
+          }
+        }
+      },
+      "id": "insert-questions",
+      "name": "Insert Questions to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3320, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Split prompts by delimiter\nconst responseText = $input.item.json.content[0].text;\nconst courseId = $('Set Topics').first().json.course_id;\n\n// Split by === PROMPT ===\nconst prompts = responseText\n  .split('=== PROMPT ===')\n  .map(p => p.trim())\n  .filter(p => p.length > 50); // Filter out empty or too short segments\n\nreturn prompts.map((prompt, index) => ({\n  prompt: prompt,\n  course_id: courseId,\n  index: index + 1\n}));"
+      },
+      "id": "split-prompts",
+      "name": "Split Prompts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3100, 400]
+    },
+    {
+      "parameters": {
+        "prompt": "={{$json.prompt}}",
+        "options": {
+          "aspectRatio": "9:16"
+        }
+      },
+      "id": "generate-image",
+      "name": "Gemini Generate Image",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGemini",
+      "typeVersion": 1,
+      "position": [3320, 400],
+      "credentials": {
+        "geminiApi": {
+          "id": "GEMINI_CREDENTIAL_ID",
+          "name": "Gemini API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://syzxedbcapcynzjlpjcg.supabase.co/storage/v1/object/media/{{$json.course_id}}/infographic_{{$json.index}}.png",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawBody": "={{$json.image_data}}",
+        "options": {}
+      },
+      "id": "upload-image",
+      "name": "Upload Image to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [3540, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{$('Set Topics').first().json.chat_id}}",
+        "text": "=🎉 הושלם!\n\n✅ {{$('Parse Questions').all().length}} שאלות נוספו\n✅ {{$('Split Prompts').all().length}} אינפוגרפיקות נוצרו\n\nהקורס: {{$('Set Topics').first().json.course_id}}\n\nהכל מוכן!",
+        "additionalFields": {}
+      },
+      "id": "notify-complete",
+      "name": "Notify Complete",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [3760, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "TELEGRAM_CREDENTIAL_ID",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check if PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if PDF": {
+      "main": [
+        [
+          {
+            "node": "Ask Course Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ask Course Name": {
+      "main": [
+        [
+          {
+            "node": "Wait for Course Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for Course Name": {
+      "main": [
+        [
+          {
+            "node": "Prepare Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Data": {
+      "main": [
+        [
+          {
+            "node": "Notify Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Start": {
+      "main": [
+        [
+          {
+            "node": "Upsert Course Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Course Settings": {
+      "main": [
+        [
+          {
+            "node": "Get PDF File Path",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get PDF File Path": {
+      "main": [
+        [
+          {
+            "node": "Download PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download PDF": {
+      "main": [
+        [
+          {
+            "node": "Claude: Analyze Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Analyze Topics": {
+      "main": [
+        [
+          {
+            "node": "Set Topics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Topics": {
+      "main": [
+        [
+          {
+            "node": "Notify Progress",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Progress": {
+      "main": [
+        [
+          {
+            "node": "Claude: Generate Questions",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Claude: Generate Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Generate Questions": {
+      "main": [
+        [
+          {
+            "node": "Parse Questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Questions": {
+      "main": [
+        [
+          {
+            "node": "Insert Questions to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Questions to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Notify Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Generate Prompts": {
+      "main": [
+        [
+          {
+            "node": "Split Prompts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Prompts": {
+      "main": [
+        [
+          {
+            "node": "Gemini Generate Image",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Generate Image": {
+      "main": [
+        [
+          {
+            "node": "Upload Image to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Image to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Notify Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-02-04T00:00:00.000Z",
+  "versionId": "1"
+}
