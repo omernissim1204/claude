@@ -93,7 +93,7 @@
             },
             {
               "name": "Authorization",
-              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5enhlZGJjYXBjeW56amxwamNnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Njc2NDg1NywiZXhwIjoyMDgyMzQwODU3fQ.Nlj_OO8PO4DZeEDYNj8vnqXMf0N0S7lhyxDwPFn3gks"
+              "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY"
             },
             {
               "name": "Prefer",
@@ -307,7 +307,7 @@
             },
             {
               "name": "Authorization",
-              "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5enhlZGJjYXBjeW56amxwamNnIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2Njc2NDg1NywiZXhwIjoyMDgyMzQwODU3fQ.Nlj_OO8PO4DZeEDYNj8vnqXMf0N0S7lhyxDwPFn3gks"
+              "value": "Bearer YOUR_SUPABASE_SERVICE_ROLE_KEY"
             },
             {
               "name": "Content-Type",
